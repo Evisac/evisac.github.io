@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>World Radio</title>
+<meta property="og:title" content="World Radio">
+<meta property="og:description" content="Radio hören mit World Radio 🎧">
+<meta property="og:image" content="https://evisac.github.io/icon.png">
+<meta property="og:type" content="website">
+<style>
+  :root { --bg:#061820; --card:#0f2a35; --mint:#2EE6A8; --teal:#00B3C7; --txt:#eef4f6; --sub:#9fb3bb; }
+  * { box-sizing:border-box; }
+  body { margin:0; min-height:100vh; background:radial-gradient(circle at 50% 0%, #0c3340 0%, var(--bg) 60%);
+         color:var(--txt); font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+         display:flex; align-items:center; justify-content:center; padding:24px 16px; }
+  .card { width:100%; max-width:420px; background:var(--card); border-radius:28px; padding:28px 24px;
+          text-align:center; box-shadow:0 20px 60px rgba(0,0,0,.4); }
+  .brand { display:flex; align-items:center; justify-content:center; gap:10px; color:var(--sub);
+           font-weight:600; margin-bottom:22px; }
+  .brand img { width:28px; height:28px; border-radius:8px; }
+  .logo { width:160px; height:160px; border-radius:28px; background:#fff; margin:0 auto 18px;
+          display:flex; align-items:center; justify-content:center; overflow:hidden; }
+  .logo img { width:88%; height:88%; object-fit:contain; }
+  .logo.fill { background:transparent; }
+  .logo.fill img { width:100%; height:100%; object-fit:cover; }
+  h1 { font-size:26px; margin:0 0 6px; line-height:1.2; }
+  .meta { color:var(--sub); font-size:15px; margin-bottom:24px; }
+  .btn { display:flex; align-items:center; justify-content:center; gap:10px; width:100%; padding:15px;
+         border-radius:999px; border:0; font-size:17px; font-weight:700; text-decoration:none; cursor:pointer;
+         margin-top:12px; }
+  .primary { background:var(--mint); color:#00382a; }
+  .secondary { background:transparent; color:var(--txt); border:2px solid #2b4a56; }
+  .hint { color:var(--sub); font-size:13px; margin-top:18px; line-height:1.4; }
+  .applink { display:block; margin-top:14px; color:var(--mint); font-size:14px; text-decoration:underline; }
+  .live { display:none; color:#F01E1E; font-weight:700; margin-top:14px; }
+  .live::before { content:"● "; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="brand"><img src="icon.png" alt=""> World Radio</div>
+  <div class="logo" id="logoBox"><img id="logo" alt=""></div>
+  <h1 id="name">Radio</h1>
+  <div class="meta" id="meta"></div>
+
+  <button class="btn primary" id="play">▶ <span id="tPlay">Jetzt anhören</span></button>
+  <div class="live" id="live">Live</div>
+  <!-- Später, wenn World Radio im Play Store ist: href="https://play.google.com/store/apps/details?id=com.worldradio.app" -->
+  <a class="btn secondary" id="dl" href="https://play.google.com" target="_blank" rel="noopener"><span id="tDl">Zum Google Play Store</span></a>
+  <div class="hint" id="hint"></div>
+  <a class="applink" id="openApp" style="display:none"><span id="tOpen">App schon installiert? In World Radio öffnen</span></a>
+  <audio id="audio" preload="none"></audio>
+</div>
+<script>
+(function () {
+  var q = new URLSearchParams(location.search);
+  // Kurzlink ?s=… (22 Zeichen) -> UUID
+  function shortToUuid(v) {
+    try {
+      var b = atob(v.replace(/-/g, "+").replace(/_/g, "/")), h = "";
+      for (var i = 0; i < b.length; i++) h += ("0" + b.charCodeAt(i).toString(16)).slice(-2);
+      if (h.length !== 32) return "";
+      return h.slice(0, 8) + "-" + h.slice(8, 12) + "-" + h.slice(12, 16) + "-" + h.slice(16, 20) + "-" + h.slice(20);
+    } catch (e) { return ""; }
+  }
+  var id = q.get("id") || (q.get("s") ? shortToUuid(q.get("s")) : "");
+  var st = { name: q.get("n") || "", stream: q.get("u") || "", logo: q.get("f") || "",
+             country: q.get("c") || "", tags: q.get("t") || "" };
+  var de = (navigator.language || "de").toLowerCase().indexOf("de") === 0;
+  var T = de ? { open:"App schon installiert? In World Radio öffnen", play:"Jetzt anhören", stop:"Stopp", dl:"Zum Google Play Store",
+                 hint:"Mit der App World Radio für Android hörst du diesen Sender auch im Hintergrund und im Auto und kannst ihn speichern.",
+                 ios:"World Radio gibt es aktuell für Android." }
+             : { open:"Already have the app? Open in World Radio", play:"Listen now", stop:"Stop", dl:"Go to Google Play Store",
+                 hint:"With the World Radio app for Android you can listen in the background, in your car and save stations.",
+                 ios:"World Radio is currently available for Android." };
+  document.documentElement.lang = de ? "de" : "en";
+  document.getElementById("tOpen").textContent = T.open;
+  document.getElementById("tPlay").textContent = T.play;
+  document.getElementById("tDl").textContent = T.dl;
+  // iPhone/iPad: App gibt es (noch) nicht -> Play-Store-Knopf ausblenden
+  var ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  if (ios) document.getElementById("dl").style.display = "none";
+  document.getElementById("hint").textContent = ios ? T.ios : T.hint;
+
+  var img = document.getElementById("logo"), box = document.getElementById("logoBox"),
+      btn = document.getElementById("play");
+  function useIcon() { box.className = "logo fill"; img.onerror = null; img.src = "icon.png"; }
+
+  function render() {
+    var name = st.name || "Radio";
+    document.title = name + " – World Radio";
+    document.getElementById("name").textContent = name;
+    document.getElementById("meta").textContent =
+      [st.country, st.tags.split(",").slice(0, 3).join(", ")].filter(Boolean).join(" · ");
+    // Ohne Senderlogo: World-Radio-Symbol füllt die ganze Kachel (kein weisser Rand)
+    if (st.logo) { box.className = "logo"; img.onerror = useIcon; img.src = st.logo; } else { useIcon(); }
+    btn.style.display = st.stream ? "flex" : "none";
+  }
+  render();
+
+  // Kurzer Link (nur ?id=…): Senderdaten bei radio-browser.info nachladen
+  if (id && !st.stream && id.indexOf("custom:") !== 0) {
+    var servers = ["https://de1.api.radio-browser.info", "https://de2.api.radio-browser.info",
+                   "https://fi1.api.radio-browser.info", "https://all.api.radio-browser.info"];
+    (function load(i) {
+      if (i >= servers.length) return;
+      fetch(servers[i] + "/json/stations/byuuid/" + encodeURIComponent(id))
+        .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+        .then(function (a) {
+          var s = a && a[0]; if (!s) return;
+          st.name = s.name || st.name; st.stream = s.url_resolved || s.url || "";
+          st.logo = s.favicon || ""; st.country = s.country || ""; st.tags = s.tags || "";
+          render();
+        })
+        .catch(function () { load(i + 1); });
+    })(0);
+  }
+
+  // Android: zuerst die App versuchen; ohne App bleibt diese Seite (browser_fallback_url mit nf=1)
+  var android = /android/i.test(navigator.userAgent);
+  if (android) {
+    var fallback = location.href + (location.search ? "&" : "?") + "nf=1";
+    var intent = "intent://station" + location.search + "#Intent;scheme=worldradio;package=com.worldradio.app;" +
+                 "S.browser_fallback_url=" + encodeURIComponent(fallback) + ";end";
+    var o = document.getElementById("openApp"); o.href = intent; o.style.display = "block";
+    if (!q.get("nf")) location.href = intent;
+  }
+
+  // Im Browser anhören
+  var audio = document.getElementById("audio"), label = document.getElementById("tPlay"),
+      live = document.getElementById("live");
+  btn.onclick = function () {
+    var stream = st.stream; if (!stream) return;
+    // http-Streams darf eine https-Seite nicht abspielen -> in neuem Tab öffnen
+    if (location.protocol === "https:" && stream.indexOf("http://") === 0) { window.open(stream, "_blank"); return; }
+    if (audio.paused) {
+      audio.src = stream;
+      audio.play().then(function () { label.textContent = T.stop; live.style.display = "block"; })
+        .catch(function () { window.open(stream, "_blank"); });
+    } else {
+      audio.pause(); audio.removeAttribute("src"); audio.load();
+      label.textContent = T.play; live.style.display = "none";
+    }
+  };
+})();
+</script>
+</body>
+</html>
